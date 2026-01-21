@@ -1,0 +1,50 @@
+name: Update Fast IPs
+
+on:
+  schedule:
+    # 每6小时运行一次 (UTC时间)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # 允许手动触发
+  push:
+    paths:
+      - '.github/workflows/update-fast-ips.yml'
+
+jobs:
+  update-ips:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Download fast-ips.txt
+        run: |
+          echo "下载 fast-ips.txt 文件..."
+          curl -s -o fast-ips.txt "https://cf-speed.heweiliang88888.workers.dev/fast-ips.txt?token=B0tmhpMqbWZhtlavMPv2GugaRPGf2HNV"
+          
+          # 检查文件是否下载成功
+          if [ ! -s "fast-ips.txt" ]; then
+            echo "错误: 下载的文件为空或不存在"
+            exit 1
+          fi
+          
+          echo "文件大小: $(wc -l < fast-ips.txt) 行"
+          
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+      - name: Commit and push if changed
+        run: |
+          # 检查是否有变更
+          if git diff --quiet; then
+            echo "没有变更，跳过提交"
+          else
+            echo "检测到变更，提交到仓库"
+            git add fast-ips.txt
+            git commit -m "更新 fast-ips.txt [自动更新于 $(date -u +'%Y-%m-%d %H:%M:%S UTC')]"
+            git push
+          fi
