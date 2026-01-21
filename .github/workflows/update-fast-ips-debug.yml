@@ -1,0 +1,62 @@
+name: Update Fast IPs Debug
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-debug:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout with debug
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+          
+      - name: Debug current directory
+        run: |
+          echo "当前目录: $(pwd)"
+          echo "目录内容:"
+          ls -la
+          echo "Git 状态:"
+          git status
+          echo "Git 远程:"
+          git remote -v
+          
+      - name: Download and verify
+        run: |
+          echo "开始下载..."
+          curl -v -L -o fast-ips.txt "https://cf-speed.heweiliang88888.workers.dev/fast-ips.txt?token=B0tmhpMqbWZhtlavMPv2GugaRPGf2HNV"
+          
+          echo "下载完成，检查文件:"
+          ls -la fast-ips.txt
+          echo "文件类型:"
+          file fast-ips.txt
+          echo "前10行内容:"
+          head -10 fast-ips.txt || echo "空文件或读取失败"
+          echo "行数:"
+          wc -l fast-ips.txt || echo "无法统计行数"
+          
+      - name: Git setup
+        run: |
+          git config --global user.name "heweiliang88"
+          git config --global user.email "15816073129@163.com"
+          git config --global --list
+          
+      - name: Try to commit
+        run: |
+          echo "Git 变更状态:"
+          git status --porcelain
+          
+          echo "尝试添加文件..."
+          git add fast-ips.txt || echo "添加文件失败"
+          
+          echo "尝试提交..."
+          git commit -m "Debug commit $(date)" || echo "提交失败"
+          
+          echo "尝试推送..."
+          git push origin main || echo "推送失败"
