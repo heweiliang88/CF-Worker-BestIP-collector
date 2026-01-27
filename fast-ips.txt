@@ -1,25 +1,180 @@
-108.162.198.85#31ms
-104.31.16.158#33ms
-104.16.105.166#34ms
-162.159.38.170#34ms
-104.18.42.232#36ms
-104.17.102.159#38ms
-104.16.5.71#39ms
-104.20.51.79#40ms
-104.16.158.225#41ms
-104.19.148.121#42ms
-104.16.86.170#45ms
-104.17.164.80#49ms
-104.18.80.136#53ms
-104.19.212.207#57ms
-104.19.164.187#58ms
-104.26.3.162#58ms
-104.26.8.117#58ms
-162.159.24.131#62ms
-104.19.220.22#63ms
-104.17.142.212#64ms
-104.17.162.3#64ms
-162.159.39.160#64ms
-104.16.30.108#66ms
-104.18.189.153#66ms
-104.18.89.52#69ms
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CF Edge Speedtest</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #050505; color: #e0e0e0; font-family: 'SF Mono', 'Roboto Mono', monospace; }
+    .neon-text { text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+    .neon-border { box-shadow: 0 0 15px rgba(56, 189, 248, 0.1); }
+    /* 进度条动画 */
+    .progress-bar { transition: width 0.2s linear; }
+    .value-change { transition: color 0.2s; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+  <div class="w-full max-w-lg bg-black/50 border border-slate-800 rounded-2xl p-8 backdrop-blur-md neon-border relative overflow-hidden">
+    
+    <div class="absolute -top-10 -right-10 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="relative z-10">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2 tracking-tighter">EDGE SPEEDTEST</h1>
+        <p class="text-slate-500 text-xs uppercase tracking-[0.2em]">Cloudflare Network Benchmark</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800 text-center">
+          <div class="text-slate-500 text-xs mb-1 uppercase">Ping</div>
+          <div class="text-2xl font-bold text-sky-400" id="ping-val">--</div>
+          <div class="text-slate-600 text-[10px]">ms</div>
+        </div>
+        <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800 text-center">
+          <div class="text-slate-500 text-xs mb-1 uppercase">Jitter</div>
+          <div class="text-2xl font-bold text-purple-400" id="jitter-val">--</div>
+          <div class="text-slate-600 text-[10px]">ms</div>
+        </div>
+      </div>
+
+      <div class="text-center mb-8">
+        <div class="text-slate-500 text-sm mb-2 uppercase tracking-widest">Download Speed</div>
+        <div class="text-6xl font-bold text-white neon-text tabular-nums" id="speed-val">0.00</div>
+        <div class="text-sky-500 font-bold mt-1">Mbps</div>
+      </div>
+
+      <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden mb-8">
+        <div id="progress" class="h-full bg-gradient-to-r from-sky-500 to-purple-500 w-0 progress-bar"></div>
+      </div>
+
+      <button id="start-btn" class="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-sky-50 transition-transform active:scale-[0.98] tracking-widest uppercase">
+        Start Test
+      </button>
+
+      <div id="status-text" class="text-center text-xs text-slate-500 mt-4 h-4">Ready</div>
+    </div>
+  </div>
+
+  <script>
+    const UI = {
+      ping: document.getElementById('ping-val'),
+      jitter: document.getElementById('jitter-val'),
+      speed: document.getElementById('speed-val'),
+      progress: document.getElementById('progress'),
+      btn: document.getElementById('start-btn'),
+      status: document.getElementById('status-text')
+    };
+
+    let isRunning = false;
+
+    UI.btn.addEventListener('click', async () => {
+      if (isRunning) return;
+      isRunning = true;
+      UI.btn.disabled = true;
+      UI.btn.classList.add('opacity-50', 'cursor-not-allowed');
+      resetUI();
+
+      try {
+        await runPingTest();
+        await runDownloadTest();
+      } catch (e) {
+        UI.status.textContent = 'Error: ' + e.message;
+        UI.status.classList.add('text-red-500');
+      } finally {
+        isRunning = false;
+        UI.btn.disabled = false;
+        UI.btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        UI.btn.textContent = "Test Again";
+        UI.status.textContent = "Test Completed";
+      }
+    });
+
+    function resetUI() {
+      UI.ping.textContent = '--';
+      UI.jitter.textContent = '--';
+      UI.speed.textContent = '0.00';
+      UI.progress.style.width = '0%';
+      UI.status.classList.remove('text-red-500');
+    }
+
+    // 1. 延迟测试 (发送 10 次请求计算平均值和抖动)
+    async function runPingTest() {
+      UI.status.textContent = "Measuring Latency...";
+      const pings = [];
+      const iterations = 10;
+
+      // 预热一次
+      await fetch('/api/ping');
+
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await fetch('/api/ping?t=' + Date.now()); // 加时间戳防止缓存
+        const duration = performance.now() - start;
+        pings.push(duration);
+        
+        // 实时更新 UI
+        UI.ping.textContent = duration.toFixed(0);
+        UI.progress.style.width = `${((i + 1) / iterations) * 20}%`; // Ping 占前 20% 进度
+        await new Promise(r => setTimeout(r, 100)); // 间隔防止并发
+      }
+
+      // 计算统计数据
+      const min = Math.min(...pings);
+      const avg = pings.reduce((a, b) => a + b, 0) / pings.length;
+      
+      // 计算抖动 (平均绝对偏差)
+      const jitter = pings.reduce((acc, curr) => acc + Math.abs(curr - avg), 0) / pings.length;
+
+      UI.ping.textContent = avg.toFixed(0);
+      UI.jitter.textContent = jitter.toFixed(1);
+    }
+
+    // 2. 下载测试
+    async function runDownloadTest() {
+      UI.status.textContent = "Measuring Download Speed...";
+      
+      // 测试大小：50MB (你可以根据需要调整，太大可能导致 Worker 超时，太小测不准)
+      const testSize = 50 * 1024 * 1024; 
+      const response = await fetch(`/api/down?bytes=${testSize}`);
+      const reader = response.body.getReader();
+      
+      let receivedLength = 0;
+      let startTime = performance.now();
+      let lastUpdate = startTime;
+
+      while(true) {
+        const {done, value} = await reader.read();
+        
+        if (done) break;
+        receivedLength += value.length;
+        
+        const now = performance.now();
+        // 每 100ms 更新一次 UI，避免界面卡顿
+        if (now - lastUpdate > 100) {
+          const duration = (now - startTime) / 1000; // 秒
+          const bits = receivedLength * 8;
+          const mbps = (bits / duration / 1000 / 1000).toFixed(2);
+          
+          UI.speed.textContent = mbps;
+          // 进度条逻辑：Ping 占 20%，下载占 80%
+          const percentage = 20 + ((receivedLength / testSize) * 80);
+          UI.progress.style.width = `${Math.min(percentage, 100)}%`;
+          
+          lastUpdate = now;
+        }
+      }
+
+      // 最终精确计算
+      const totalDuration = (performance.now() - startTime) / 1000;
+      const finalMbps = ((receivedLength * 8) / totalDuration / 1000 / 1000).toFixed(2);
+      UI.speed.textContent = finalMbps;
+      UI.progress.style.width = '100%';
+    }
+  </script>
+</body>
+</html>
+  
